@@ -1,0 +1,94 @@
+name: host-biiquiz
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-biiquiz}
+      POSTGRES_USER: ${POSTGRES_USER:-biiquiz}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Dokploy}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-biiquiz} -d ${POSTGRES_DB:-biiquiz}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - app_net
+
+  migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.migrations
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-biiquiz}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-biiquiz}
+      DIRECT_URL: postgresql://${POSTGRES_USER:-biiquiz}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-biiquiz}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app_net
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER:-basan-ta}/host-biiquiz-frontend:${IMAGE_TAG:-latest}
+    container_name: host-biiquiz-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./frontend/.env.production
+    environment:
+      NEXT_PUBLIC_API_URL: /api
+      USE_DJANGO_API: "true"
+      DJANGO_API_URL: http://backend:8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-biiquiz}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-biiquiz}
+      DIRECT_URL: postgresql://${POSTGRES_USER:-biiquiz}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-biiquiz}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - app_net
+
+  backend:
+    image: ghcr.io/${GHCR_OWNER:-basan-ta}/host-biiquiz-backend:${IMAGE_TAG:-latest}
+    container_name: host-biiquiz-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8765:8000"
+    env_file:
+      - ./backend/.env.production
+    environment:
+      GUNICORN_BIND: 0.0.0.0:8000
+      HEALTHCHECK_HOST: host.biiquiz.com
+      DJANGO_RUNTIME: docker
+      DATABASE_URL: postgresql://${POSTGRES_USER:-biiquiz}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-biiquiz}
+    networks:
+      - app_net
+    depends_on:
+      db:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
+  redis:
+    image: redis:7-alpine
+    container_name: host-biiquiz-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    networks:
+      - app_net
+
+volumes:
+  postgres_data:
+    name: host-biiquiz-postgres-data
+
+networks:
+  app_net:
+    driver: bridge

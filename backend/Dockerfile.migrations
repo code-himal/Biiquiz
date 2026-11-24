@@ -1,0 +1,12 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --global prisma@5.22.0
+COPY prisma ./prisma
+
+CMD ["prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]

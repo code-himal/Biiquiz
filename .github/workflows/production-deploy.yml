@@ -1,0 +1,17 @@
+name: Production Deploy Deprecated
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  use-deploy-workflow:
+    name: Use deploy.yml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment workflow moved
+        run: |
+          echo "Production deployment now runs from .github/workflows/deploy.yml."
+          echo "This workflow is kept only to avoid conflicting push-based deploy logic."
