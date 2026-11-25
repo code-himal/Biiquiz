@@ -111,6 +111,7 @@ export function CreateQuizForm() {
                 compact
                 simple
                 namePrefix="ai"
+                topicRequired={false}
                 initialValues={{
                   subject: "",
                   level: "",
